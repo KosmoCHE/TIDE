@@ -10,7 +10,6 @@ from utils.llm_agent.ctx_manager import StepMemory
 from utils.llm_agent.base_agent import BaseAgent
 from ragen.env.base import BaseEnv
 from omegaconf import DictConfig
-from omegaconf import OmegaConf
 import threading
 from utils.func import save_result_local
 from concurrent.futures import ThreadPoolExecutor
@@ -183,36 +182,6 @@ class TaskRunnerBase:
                 data.append(json.loads(line))
         return data
 
-    def _load_blocksworld_seed_query_map(self, exp_dir: str) -> Dict[Any, str]:
-        """Load full original query by seed for blocksworld reference matching."""
-        config_path = os.path.join(exp_dir, "config.yaml")
-        config = OmegaConf.load(config_path)
-        data_path = config.get("data_path")
-        if not data_path:
-            raise ValueError(
-                f"Reference config missing data_path: {config_path}"
-            )
-        if not os.path.isabs(data_path):
-            data_path = os.path.join(os.getcwd(), data_path)
-        if not os.path.exists(data_path):
-            raise FileNotFoundError(
-                f"Reference data_path not found: {data_path}"
-            )
-
-        dataset = json.load(open(data_path, "r", encoding="utf-8"))
-        seed_query_map: Dict[Any, str] = {}
-        for item in dataset:
-            seed = item.get("seed")
-            query = item.get("query")
-            if seed is None or query is None:
-                continue
-            if seed in seed_query_map and seed_query_map[seed] != query:
-                raise ValueError(
-                    f"Blocksworld dataset has duplicate seed with different query: seed={seed}"
-                )
-            seed_query_map[seed] = query
-        return seed_query_map
-
     def _load_reference_prompt_len_map(
         self,
     ) -> tuple[Dict[str, List[int]], str]:
@@ -241,10 +210,6 @@ class TaskRunnerBase:
             os.path.join(selected_dir, jsonl_files[0])
         )
 
-        seed_query_map: Dict[Any, str] = {}
-        if self.task == "blocksworld":
-            seed_query_map = self._load_blocksworld_seed_query_map(selected_dir)
-
         reference_map: Dict[str, List[int]] = {}
         for sample in raw_data:
             traj_rollouts = sample.get("traj_rollouts", [])
@@ -258,12 +223,12 @@ class TaskRunnerBase:
             ]
 
             if self.task == "blocksworld":
-                seed = sample.get("seed")
-                if seed not in seed_query_map:
+                query = sample.get("query")
+                if query is None:
                     raise ValueError(
-                        f"Blocksworld reference seed {seed} not found in reference dataset map"
+                        "Blocksworld reference sample missing query field"
                     )
-                key = str(seed_query_map[seed])
+                key = str(query)
             else:
                 seed = sample.get("seed")
                 if seed is None:
