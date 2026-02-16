@@ -35,6 +35,7 @@ class FrozenLakeRunner(TaskRunner):
         self.init_lock = threading.Lock()
         self.think_tag = "analysis"
         self._init_system_prompt()
+        self._init_prompt_len_alignment()
         if dataset is not None:
             self.dataset = dataset
         else:
@@ -189,15 +190,10 @@ class FrozenLakeRunner(TaskRunner):
             traj_rollout_idx=traj_rollout_idx,
             env=env,
             env_idx=0,
-            ctx_manager=ContextManager(
-                system_prompt=self.system_prompt,
+            ctx_manager=self._create_context_manager(
                 instruction_prompt=self.get_state_description(init_obs),
-                tokenizer=(
-                    self.agent.tokenizer
-                    if hasattr(self.agent, "tokenizer")
-                    else None
-                ),
-                config=self.config,
+                data=data,
+                env=env,
             ),
             steps=[],
         )

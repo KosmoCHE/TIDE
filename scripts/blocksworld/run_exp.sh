@@ -5,11 +5,11 @@ export BATCH_SIZE=50
 export MAX_STEPS=30
 export OFFER_FEEDBACK=True
 
-export CHAT_FORMAT="user_assistant_format"
-export ENABLE_THINKING=False
-export HISTORY_HAS_COT=True
-export STATE="env"
-bash scripts/blocksworld/eval_blocksworld.sh
+# export CHAT_FORMAT="user_assistant_format"
+# export ENABLE_THINKING=False
+# export HISTORY_HAS_COT=True
+# export STATE="env"
+# bash scripts/blocksworld/eval_blocksworld.sh
 #############################################
 export CHAT_FORMAT="user_assistant_format_part"
 export HISTORY_WINDOW_SIZE=0

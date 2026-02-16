@@ -22,6 +22,8 @@ class BlocksworldEnv(BaseDiscreteActionEnv):
         self.goal: Set[str] = set()
         self.holding: Optional[str] = None
         self.step_count: int = 0
+        # Keep full raw query for matching/analysis; instruction_text may be transformed.
+        self.full_query_text: str = ""
 
         # Initialize parent class
         super().__init__()
@@ -34,7 +36,8 @@ class BlocksworldEnv(BaseDiscreteActionEnv):
             raise ValueError(
                 "PDDL text must be provided for BlocksworldEnv reset."
             )
-        self.instruction_text: str = game_file.get("query", "")
+        self.full_query_text = game_file.get("query", "")
+        self.instruction_text: str = self.full_query_text
         if "# Goal State" in self.instruction_text:
             goal_state_index = self.instruction_text.find("# Goal State")
             # Extract content after "# Goal State" (skip "# Goal State" itself)

@@ -1,6 +1,7 @@
 
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
+import json
 
 @dataclass
 class StepMemory:
@@ -27,6 +28,105 @@ class ContextManager:
         self.enable_thinking = config.agent_proxy.enable_thinking
         if self.chat_format == "user_assistant_format_part":
             self.history_window_size = config.agent_proxy.history_window_size
+        self.prompt_len_align_enabled: bool = False
+        self.prompt_len_align_target_lengths: List[int] = []
+        self.prompt_len_align_pad_text: str = "<pad>"
+        self.prompt_len_align_match_key: str = ""
+        self.prompt_len_align_reference_exp_dir: str = ""
+
+    def set_prompt_len_alignment(
+        self,
+        target_lengths: List[int],
+        pad_text: str = "<pad>",
+        match_key: str = "",
+        reference_exp_dir: str = "",
+    ) -> None:
+        self.prompt_len_align_enabled = True
+        self.prompt_len_align_target_lengths = list(target_lengths or [])
+        self.prompt_len_align_pad_text = pad_text
+        self.prompt_len_align_match_key = match_key
+        self.prompt_len_align_reference_exp_dir = reference_exp_dir
+
+    def _get_alignment_target_length(self, turn_idx: int) -> int:
+        if not self.prompt_len_align_target_lengths:
+            raise ValueError(
+                "Prompt-length alignment enabled but target length list is empty. "
+                f"key={self.prompt_len_align_match_key}, reference={self.prompt_len_align_reference_exp_dir}"
+            )
+        if turn_idx < len(self.prompt_len_align_target_lengths):
+            return self.prompt_len_align_target_lengths[turn_idx]
+        return self.prompt_len_align_target_lengths[-1]
+
+    def _messages_len(self, messages: List[Dict[str, str]]) -> int:
+        return len(json.dumps(messages, ensure_ascii=False, separators=(",", ":")))
+
+    def _apply_left_pad_for_alignment_to_messages(
+        self,
+        messages: List[Dict[str, str]],
+        turn_idx: int,
+    ) -> List[Dict[str, str]]:
+        if not self.prompt_len_align_enabled:
+            return messages
+        target_len = self._get_alignment_target_length(turn_idx)
+        current_len = self._messages_len(messages)
+        if current_len >= target_len:
+            return messages
+
+        delta = target_len - current_len
+        pad_unit = self.prompt_len_align_pad_text
+        if not isinstance(pad_unit, str) or len(pad_unit) == 0:
+            raise ValueError("pad_text must be a non-empty string")
+        pad_count = delta // len(pad_unit)
+        remainder = delta % len(pad_unit)
+        pad_prefix = (" " * remainder) + (pad_unit * pad_count)
+
+        user_idx = next((i for i, m in enumerate(messages) if m.get("role") == "user"), None)
+        if user_idx is None:
+            raise ValueError("No user message found for prompt-length alignment")
+        messages[user_idx]["content"] = pad_prefix + messages[user_idx]["content"]
+        return messages
+
+    def _apply_left_pad_for_alignment_to_prompt(
+        self,
+        messages: List[Dict[str, str]],
+        turn_idx: int,
+    ) -> str:
+        if not self.prompt_len_align_enabled:
+            return self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                enable_thinking=self.enable_thinking,
+                add_generation_prompt=True,
+            )
+
+        target_len = self._get_alignment_target_length(turn_idx)
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            enable_thinking=self.enable_thinking,
+            add_generation_prompt=True,
+        )
+        if len(prompt) >= target_len:
+            return prompt
+
+        delta = target_len - len(prompt)
+        pad_unit = self.prompt_len_align_pad_text
+        if not isinstance(pad_unit, str) or len(pad_unit) == 0:
+            raise ValueError("pad_text must be a non-empty string")
+        pad_count = delta // len(pad_unit)
+        remainder = delta % len(pad_unit)
+        pad_prefix = (" " * remainder) + (pad_unit * pad_count)
+
+        user_idx = next((i for i, m in enumerate(messages) if m.get("role") == "user"), None)
+        if user_idx is None:
+            raise ValueError("No user message found for prompt-length alignment")
+        messages[user_idx]["content"] = pad_prefix + messages[user_idx]["content"]
+        return self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            enable_thinking=self.enable_thinking,
+            add_generation_prompt=True,
+        )
 
     def format_prompt(self) -> str:
         """
@@ -118,11 +218,9 @@ class ContextManager:
             if len(process_history) == 1:
                 if self.state != "no":
                     messages[1]["content"] += f"\ncurrent state: <state>{process_history[0].input_state}</state>"
-                prompt = self.tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    enable_thinking=self.enable_thinking,
-                    add_generation_prompt=True,
+                prompt = self._apply_left_pad_for_alignment_to_prompt(
+                    messages=messages,
+                    turn_idx=0,
                 )
                 return prompt
 
@@ -160,11 +258,9 @@ class ContextManager:
                 last_user_content = f"current state: <state>{process_history[-1].input_state}</state>"
             messages.append({"role": "user", "content": last_user_content})
 
-            prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                enable_thinking=self.enable_thinking,
-                add_generation_prompt=True,
+            prompt = self._apply_left_pad_for_alignment_to_prompt(
+                messages=messages,
+                turn_idx=len(process_history) - 1,
             )
 
         return prompt
@@ -221,6 +317,10 @@ class ContextManager:
             if len(process_history) == 1:
                 if self.state != "no":
                     messages[1]["content"] += f"\ncurrent state:<state>{process_history[0].input_state}</state>"
+                messages = self._apply_left_pad_for_alignment_to_messages(
+                    messages=messages,
+                    turn_idx=0,
+                )
                 return messages
 
             # Truncate history based on history_window_size
@@ -256,6 +356,10 @@ class ContextManager:
             if self.state != "no":
                 last_user_content = f"current state:<state>{process_history[-1].input_state}</state>"
             messages.append({"role": "user", "content": last_user_content})
+            messages = self._apply_left_pad_for_alignment_to_messages(
+                messages=messages,
+                turn_idx=len(process_history) - 1,
+            )
             
         return messages
     

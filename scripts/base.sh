@@ -44,6 +44,10 @@ WEBSHOP_EVAL_MODE=${WEBSHOP_EVAL_MODE:-"full"} # Evaluation mode in webshop envi
 RANDOM_STEP_ENABLE=${RANDOM_STEP_ENABLE:-False} # Whether to enable random step injection
 RANDOM_STEP_NUM=${RANDOM_STEP_NUM:-5} # Number of random steps to inject
 STOP_BY_SELF_ENABLE=${STOP_BY_SELF_ENABLE:-False} # Whether to enable model self-stop functionality
+# prompt length alignment ablation settings
+PROMPT_LEN_ALIGN_ENABLE=${PROMPT_LEN_ALIGN_ENABLE:-False}
+PROMPT_LEN_ALIGN_PAD_TEXT=${PROMPT_LEN_ALIGN_PAD_TEXT:-"<pad>"}
+PROMPT_LEN_ALIGN_REFERENCE_ROOT=${PROMPT_LEN_ALIGN_REFERENCE_ROOT:-""}
 # --- Dynamically construct log file name based on parameters ---
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 FILENAME_PARTS=(${TIMESTAMP})
@@ -69,6 +73,9 @@ if [ "${TRAJECTORY_ROLLOUT_N}" -gt 1 ]; then
 fi
 if [ "${STEP_ROLLOUT_N}" -gt 1 ]; then
     FILENAME_PARTS+=("step_rollout${STEP_ROLLOUT_N}")
+fi
+if [ "${PROMPT_LEN_ALIGN_ENABLE}" = "True" ]; then
+    FILENAME_PARTS+=("prompt_len_align")
 fi
 FILENAME_PARTS+=("${CHAT_FORMAT}")
 # 4. Combine final log file path
@@ -122,6 +129,9 @@ client_agent.model_series=${MODEL_SERIES} \
 additional_exp.random_step.enable=${RANDOM_STEP_ENABLE} \
 additional_exp.random_step.num=${RANDOM_STEP_NUM} \
 additional_exp.stop_by_self.enable=${STOP_BY_SELF_ENABLE} \
+additional_exp.prompt_len_align.enable=${PROMPT_LEN_ALIGN_ENABLE} \
+additional_exp.prompt_len_align.pad_text="'${PROMPT_LEN_ALIGN_PAD_TEXT}'" \
+additional_exp.prompt_len_align.reference_root="'${PROMPT_LEN_ALIGN_REFERENCE_ROOT}'" \
 env.alfworld.eval_mode=${ALFWORLD_EVAL_MODE} \
 env.webshop.eval_mode=${WEBSHOP_EVAL_MODE} > ${LOG_FILE} 2>&1
 

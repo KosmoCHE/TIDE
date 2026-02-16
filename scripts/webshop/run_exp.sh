@@ -8,13 +8,11 @@ export MAX_STEPS=20
 export OFFER_FEEDBACK=True
 
 
-export CHAT_FORMAT="user_assistant_format"  
-
-export ENABLE_THINKING=False
-export HISTORY_HAS_COT=True
-
-export STATE="env"
-bash scripts/webshop/eval_small.sh
+# export CHAT_FORMAT="user_assistant_format"  
+# export ENABLE_THINKING=False
+# export HISTORY_HAS_COT=True
+# export STATE="env"
+# bash scripts/webshop/eval_small.sh
 
 
 export CHAT_FORMAT="user_assistant_format_part"

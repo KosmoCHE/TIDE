@@ -64,4 +64,9 @@ additional_exp:
     num: 1
   stop_by_self:
     enable: false
+  prompt_len_align:
+    enable: false
+    pad_text: "<pad>"
+    # Should point to a task-specific directory like ./res/sudoku or ./res/alfworld
+    reference_root: ""
           

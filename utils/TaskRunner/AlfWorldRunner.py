@@ -58,11 +58,10 @@ class AlfWorldRunner(TaskRunner):
             traj_rollout_idx=traj_rollout_idx,
             env=env,
             env_idx=env_idx,
-            ctx_manager=ContextManager(
-                system_prompt=self.system_prompt,
+            ctx_manager=self._create_context_manager(
                 instruction_prompt=instruction_text,
-                tokenizer=self.agent.tokenizer if hasattr(self.agent, 'tokenizer') else None,
-                config=self.config,
+                data=data,
+                env=env,
             ),
             steps=[],
         )

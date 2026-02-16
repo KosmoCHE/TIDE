@@ -6,10 +6,7 @@ from ragen.env.blocksworld.env import BlocksworldEnv, BlocksworldEnvConfig
 from vllm import SamplingParams, LLM, CompletionOutput
 from utils.TaskRunner.TaskRunner import TaskRunnerBase as TaskRunner
 from transformers import AutoTokenizer
-from utils.func import (
-    save_result_local,
-    suppress_output
-)
+from utils.func import save_result_local, suppress_output
 from numpy import ndarray
 import numpy as np
 import threading
@@ -22,8 +19,11 @@ from utils.TaskRunner.TaskRunner import TrajectoryInfo
 from utils.llm_agent.ctx_manager import ContextManager, StepMemory
 from utils.llm_agent.client_agent import ClientAgent
 
+
 class BlocksWorldRunner(TaskRunner):
-    def __init__(self, config: Any, agent: VLLMAgent|ClientAgent, data: Any=None) -> None:
+    def __init__(
+        self, config: Any, agent: VLLMAgent | ClientAgent, data: Any = None
+    ) -> None:
         super().__init__(config, agent, data)
 
     def init_everything(self):
@@ -34,14 +34,13 @@ class BlocksWorldRunner(TaskRunner):
             for _ in range(num_envs):
                 futures.append(executor.submit(self._create_env))
             self.env_pool = [future.result() for future in futures]
-                
+
         self.used_envs = [False] * len(self.env_pool)
-        
+
     def _create_env(self):
         with suppress_output():
             env = BlocksworldEnv()
             return env
-                
 
     def _process_step(self, traj: TrajectoryInfo, step_info: Dict[str, Any]):
         """Process a single step of a single trajectory, including executing action and updating state."""
@@ -56,12 +55,17 @@ class BlocksWorldRunner(TaskRunner):
                 else:
                     traj.stop_right = False
                 traj.ctx_manager.history[-1].is_valid = True
-                traj.ctx_manager.history[-1].feedback = "Task already succeeded, agent stopped correctly."
+                traj.ctx_manager.history[-1].feedback = (
+                    "Task already succeeded, agent stopped correctly."
+                )
                 traj.steps[-1]["env_feedback"] = {
                     "action_is_valid": True,
                     "reward": 0,
                     "done": True,
-                    "info": {"success": True, "reason": "Task already succeeded, agent stopped correctly."},
+                    "info": {
+                        "success": True,
+                        "reason": "Task already succeeded, agent stopped correctly.",
+                    },
                 }
                 return
         if step_info["action"].lower() == "stop":
@@ -72,7 +76,10 @@ class BlocksWorldRunner(TaskRunner):
                 "action_is_valid": True,
                 "reward": 0,
                 "done": True,
-                "info": {"success": traj.success, "reason": "Agent chose to stop."},
+                "info": {
+                    "success": traj.success,
+                    "reason": "Agent chose to stop.",
+                },
             }
             return
         # execute action in environment
@@ -86,7 +93,7 @@ class BlocksWorldRunner(TaskRunner):
         else:
             traj.ctx_manager.history[-1].is_valid = True
             traj.ctx_manager.history[-1].feedback = ""
-        
+
         # update traj.steps
         traj.steps[-1]["env_feedback"] = {
             "action_is_valid": info.get("action_is_valid", True),
@@ -123,11 +130,10 @@ class BlocksWorldRunner(TaskRunner):
                 traj_rollout_idx=traj_idx,
                 env=env,
                 env_idx=env_idx,
-                ctx_manager=ContextManager(
-                    system_prompt=self.system_prompt,
+                ctx_manager=self._create_context_manager(
                     instruction_prompt=env.instruction_text,
-                    tokenizer=self.agent.tokenizer,
-                    config=self.config,
+                    data=data,
+                    env=env,
                 ),
                 steps=[],
             )
@@ -153,7 +159,7 @@ class BlocksWorldRunner(TaskRunner):
         pass_at_n = any(all_accuracies) if all_accuracies else False
 
         return {
-            "query": traj.ctx_manager.instruction_prompt,
+            "query": self._get_result_query(data, traj),
             "seed": data["seed"],
             "all_accuracies": all_accuracies,
             "avg_accuracy": avg_accuracy,
@@ -165,7 +171,9 @@ class BlocksWorldRunner(TaskRunner):
             },
         }
 
-    def _initialize_trajectory(self, data_idx: int, data: dict, traj_rollout_idx: int) -> TrajectoryInfo:
+    def _initialize_trajectory(
+        self, data_idx: int, data: dict, traj_rollout_idx: int
+    ) -> TrajectoryInfo:
         """Parallelly initialize environment and context for a single trajectory."""
         env_idx, env = self._get_env_from_pool()
         with self.init_lock:
@@ -175,15 +183,10 @@ class BlocksWorldRunner(TaskRunner):
             traj_rollout_idx=traj_rollout_idx,
             env=env,
             env_idx=env_idx,
-            ctx_manager=ContextManager(
-                system_prompt=self.system_prompt,
+            ctx_manager=self._create_context_manager(
                 instruction_prompt=env.instruction_text,
-                tokenizer=(
-                    self.agent.tokenizer
-                    if hasattr(self.agent, "tokenizer")
-                    else None
-                ),
-                config=self.config,
+                data=data,
+                env=env,
             ),
             steps=[],
         )
