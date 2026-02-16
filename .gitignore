@@ -8,7 +8,7 @@ logs*/
 data/alfworld/*/
 outputs/
 config/api_key.yaml
-
+.github/
 test.sh
 test*.ipynb
 yh*
